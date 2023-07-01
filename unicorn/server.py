@@ -40,7 +40,7 @@ def import_from_string(import_str: Any) -> Any:
 
 class Server:
     def __init__(self, app, host='0.0.0.0', port=8000):
-        self.app = app
+        self.app = import_from_string(app)
         self.writer = None
         self.body = None
         self.host = host
@@ -121,7 +121,8 @@ class Server:
         server = await asyncio.start_server(
             self.handle_request,
             host=self.host,
-            port=self.port
+            port=self.port,
+            reuse_port=True
         )
         async with server:
             await server.serve_forever()

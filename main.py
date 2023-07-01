@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from unicorn.server import Server
+from unicorn.manager import Manager
 
 app = FastAPI(debug=True)
 
@@ -33,4 +33,4 @@ async def index(person: Person, suffix=None):
 if __name__ == "__main__":
     # from uvicorn import run
     # run(app="main:app", host='0.0.0.0', port=8000)
-    Server(app=app).run()
+    Manager(app='main:app', host='0.0.0.0', port=8000, workers=3).run()

@@ -5,6 +5,8 @@ name = "pypi"
 
 [packages]
 fastapi = "==0.97.0"
+pydantic = "*"
+uvicorn = "*"
 
 [dev-packages]
 

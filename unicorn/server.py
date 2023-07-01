@@ -38,14 +38,13 @@ def import_from_string(import_str: Any) -> Any:
     return instance
 
 
-host = '0.0.0.0'
-port = 8000
-
-
 class Server:
-    def __init__(self, app):
+    def __init__(self, app, host='0.0.0.0', port=8000):
         self.app = app
         self.writer = None
+        self.body = None
+        self.host = host
+        self.port = port
 
     def run(self):
         asyncio.run(self.serve())
@@ -68,7 +67,7 @@ class Server:
             logging.warning(f"Unhandled message type: {message_type}")
 
     async def receive(self):
-        return {'type': 'http.request', 'body': b''}
+        return {'type': 'http.request', 'body': self.body}
 
     @staticmethod
     def _parse_request(request_bytes):
@@ -86,7 +85,7 @@ class Server:
         for line in request_lines[1:]:
             if line:
                 key, value = line.split(': ', 1)
-                headers.append((key, value))
+                headers.append((key.lower().encode('utf-8'), value.encode('utf-8')))
 
         # Extract the body (if present)
         body_index = request.find('\r\n\r\n')
@@ -98,9 +97,9 @@ class Server:
         return request_method, path, query_string, headers, body
 
     async def handle_request(self, reader, writer):
-        self.reader = reader
-        data = await self.reader.read(10000)
+        data = await reader.read(10000)
         method, path, query_string, headers, body = self._parse_request(data)
+        self.body = body
         scope = {
             'type': 'http',
             'http_version': '1.1',
@@ -116,12 +115,13 @@ class Server:
         }
         self.writer = writer
         await self.app(scope, self.receive, self.send)
+        self.body = b''
 
     async def serve(self):
         server = await asyncio.start_server(
             self.handle_request,
-            host=host,
-            port=port
+            host=self.host,
+            port=self.port
         )
         async with server:
             await server.serve_forever()

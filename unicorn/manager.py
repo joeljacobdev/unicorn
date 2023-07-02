@@ -8,6 +8,7 @@ from unicorn.server import Server
 multiprocessing.allow_connection_pickling()
 spawn: multiprocessing.context.SpawnContext = multiprocessing.get_context("spawn")
 
+
 logger = logging.getLogger('unicorn')
 
 
@@ -28,6 +29,7 @@ class Manager:
         self.backlog = backlog
 
     def run(self):
+        logger.info(f'Starting manager process [{os.getpid()}]')
         for idx in range(self.workers):
             process = spawn.Process(target=run_worker, kwargs={
                 'app': self.app,
@@ -42,3 +44,4 @@ class Manager:
         for process in self.processes:
             process.terminate()
             process.join()
+        logger.info(f'Closing manager process [{os.getpid()}]')

@@ -13,8 +13,8 @@ curl -X OPTIONS -H "Content-Type: application/json" -H "Access-Control-Request-M
 - [ ] when is disconnect called?
 - [ ] support/test POST/DELETE
 - [x] test/support HEAD/OPTIONS
-- [ ] support lifecycle start/complete
-- [ ] basic multiple worker support
+- [x] support lifecycle start/complete
+- [x] basic multiple worker support
 - [ ] handling of signals and cleanup
 - [ ] support keep alive
 - [ ] support SSE

@@ -31,6 +31,4 @@ async def index(person: Person, suffix=None):
 
 
 if __name__ == "__main__":
-    # from uvicorn import run
-    # run(app="main:app", host='0.0.0.0', port=8000)
     Manager(app='main:app', host='0.0.0.0', port=8000, workers=3).run()

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import signal
 
 from unicorn import utils
 
@@ -13,10 +14,16 @@ class Server:
         self.host = host
         self.port = port
         self.pid = os.getpid()
+        self.should_exit = False
+        self.logger = logging.getLogger('unicorn')
         self.access_logger = logging.getLogger('unicorn.access')
 
     def run(self):
         asyncio.run(self.serve())
+
+    def on_interrupt(self, sig, _):
+        self.logger.info(f'Received signal={sig} on server.')
+        self.should_exit = True
 
     async def handle_request(self, reader, writer):
         cycle = RequestResponseCycle(
@@ -25,17 +32,85 @@ class Server:
         await cycle.complete()
 
     async def serve(self):
+        lifecycle = Lifecycle(app=self.app, state={})
+        for sig in [signal.SIGINT, signal.SIGTERM]:
+            signal.signal(sig, self.on_interrupt)
+
         server = await asyncio.start_server(
             self.handle_request,
             host=self.host,
             port=self.port,
             reuse_port=True
         )
+        await lifecycle.on_startup()
         async with server:
-            await server.serve_forever()
+            while not self.should_exit:
+                await asyncio.sleep(0.1)
+            server.close()
+            await server.wait_closed()
+        await lifecycle.on_shutdown()
+
+
+class Lifecycle:
+    __slots__ = ('app', 'state', 'startup_event', 'shutdown_event', 'events', 'logger',)
+
+    def __init__(self, app, state):
+        self.app = app
+        self.state = state
+        self.startup_event = asyncio.Event()
+        self.shutdown_event = asyncio.Event()
+        self.logger = logging.getLogger('unicorn')
+        self.events: asyncio.Queue = asyncio.Queue()
+
+    async def main(self):
+        try:
+            scope = {
+                'type': 'lifespan',
+                'asgi': {
+                    'spec_version': '2.3',
+                    'version': '3.0'
+                },
+                'state': self.state
+            }
+            await self.app(scope, self.receive, self.send)
+        except Exception as e:
+            self.logger.error('Failed lifespan setup of the server with the following error = ', exc_info=e)
+        finally:
+            self.startup_event.set()
+            self.shutdown_event.set()
+
+    async def on_startup(self):
+        loop = asyncio.get_running_loop()
+        main_task = loop.create_task(self.main())  # noqa
+        await self.events.put({'type': 'lifecycle.startup'})
+        await self.startup_event.wait()
+
+    async def on_shutdown(self):
+        await self.events.put({'type': 'lifecycle.shutdown'})
+        await self.shutdown_event.wait()
+
+    async def receive(self):
+        return await self.events.get()
+
+    async def send(self, message):
+        if message['type'] == 'lifecycle.startup.failed':
+            self.logger.info('Application startup has failed')
+            self.startup_event.set()
+        elif message['type'] == 'lifecycle.startup.success':
+            self.logger.info('Application startup has completed successfully')
+            self.startup_event.set()
+        elif message['type'] == 'lifecycle.shutdown.failed':
+            self.logger.info('Application shutdown has failed')
+            self.shutdown_event.set()
+        elif message['type'] == 'lifecycle.shutdown.success':
+            self.logger.info('Application shutdown has completed successfully')
+            self.shutdown_event.set()
 
 
 class RequestResponseCycle:
+    """
+    Request Response cycle level object - which has access to reader and writer to read and write the data
+    """
     __slots__ = ('app', 'reader', 'writer', 'scope', 'body', 'access_logger')
 
     def __init__(self, app, reader, writer, access_logger):
@@ -57,9 +132,9 @@ class RequestResponseCycle:
                 'spec_version': '2.3',
                 'version': '3.0'
             },
-            'method': method,
+            'method': method.decode('utf-8'),
             'headers': headers,
-            'path': path,
+            'path': path.decode('utf-8'),
             'query_string': query_string,
             'state': {}
         }
@@ -88,26 +163,26 @@ class RequestResponseCycle:
 
     @staticmethod
     def _parse_request(request_bytes):
-        request = request_bytes.decode('utf-8')
-        request_lines = request.split('\r\n')
+        request = request_bytes
+        request_lines = request.split(b'\r\n')
 
         # Extract the request method
         request_line = request_lines[0]
 
-        request_method = request_line.split(' ')[0]
-        path, _, query_string = request_line.split(' ')[1].partition('?')
+        request_method = request_line.split(b' ')[0]
+        path, _, query_string = request_line.split(b' ')[1].partition(b'?')
 
         # Extract the headers
         headers = []
         for line in request_lines[1:]:
             if line:
-                key, value = line.split(': ', 1)
-                headers.append((key.lower().encode('utf-8'), value.encode('utf-8')))
+                key, value = line.split(b': ', 1)
+                headers.append((key.lower(), value))
 
         # Extract the body (if present)
-        body_index = request.find('\r\n\r\n')
+        body_index = request.find(b'\r\n\r\n')
         if body_index != -1:
-            body = request[body_index + 4:].encode('utf-8')
+            body = request[body_index + 4:]
         else:
             body = b''
 

@@ -1,5 +1,7 @@
 import logging
 import multiprocessing
+import signal
+
 import os
 from typing import List
 
@@ -7,7 +9,6 @@ from unicorn.server import Server
 
 multiprocessing.allow_connection_pickling()
 spawn: multiprocessing.context.SpawnContext = multiprocessing.get_context("spawn")
-
 
 logger = logging.getLogger('unicorn')
 
@@ -23,13 +24,20 @@ class Manager:
         self.host = host
         self.port = port
         self.workers = workers
-        self.should_wait = multiprocessing.Event()
+        self.should_wait: multiprocessing.Event = multiprocessing.Event()
         self.processes: List[spawn.Process] = []
         self.pid = os.getpid()
         self.backlog = backlog
 
+    def on_interrupt(self, sig, _):
+        logger.info(f'Received interrupt={sig}.')
+        self.should_wait.set()
+
     def run(self):
         logger.info(f'Starting manager process [{os.getpid()}]')
+        for sig in [signal.SIGINT, signal.SIGTERM]:
+            signal.signal(sig, self.on_interrupt)
+
         for idx in range(self.workers):
             process = spawn.Process(target=run_worker, kwargs={
                 'app': self.app,

@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import FastAPI
@@ -5,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from unicorn.manager import Manager
+
+logger = logging.getLogger('app')
 
 app = FastAPI(debug=True)
 
@@ -17,6 +20,16 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
 )
+
+
+@app.on_event('startup')
+async def on_startup():
+    logger.info('on startup')
+
+
+@app.on_event('shutdown')
+async def on_shutdown():
+    logger.info('on shutdown')
 
 
 class Person(BaseModel):

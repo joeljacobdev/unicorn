@@ -1,4 +1,5 @@
 import logging
+import threading
 import multiprocessing
 import signal
 
@@ -24,13 +25,13 @@ class Manager:
         self.host = host
         self.port = port
         self.workers = workers
-        self.should_wait: multiprocessing.Event = multiprocessing.Event()
+        self.should_wait: threading.Event = threading.Event()
         self.processes: List[spawn.Process] = []
         self.pid = os.getpid()
         self.backlog = backlog
 
     def on_interrupt(self, sig, _):
-        logger.info(f'Received interrupt={sig}.')
+        logger.info(f'Received interrupt={sig} on manager.')
         self.should_wait.set()
 
     def run(self):

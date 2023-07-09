@@ -40,14 +40,14 @@ class Server:
             self.handle_request,
             host=self.host,
             port=self.port,
-            reuse_port=True
+            reuse_port=True,
+            start_serving=False
         )
         await lifecycle.on_startup()
         async with server:
+            await server.start_serving()
             while not self.should_exit:
                 await asyncio.sleep(0.1)
-            server.close()
-            await server.wait_closed()
         await lifecycle.on_shutdown()
 
 
@@ -93,16 +93,16 @@ class Lifecycle:
         return await self.events.get()
 
     async def send(self, message):
-        if message['type'] == 'lifecycle.startup.failed':
+        if message['type'] == 'lifespan.startup.failed':
             self.logger.info('Application startup has failed')
             self.startup_event.set()
-        elif message['type'] == 'lifecycle.startup.success':
+        elif message['type'] == 'lifespan.startup.complete':
             self.logger.info('Application startup has completed successfully')
             self.startup_event.set()
-        elif message['type'] == 'lifecycle.shutdown.failed':
+        elif message['type'] == 'lifespan.shutdown.failed':
             self.logger.info('Application shutdown has failed')
             self.shutdown_event.set()
-        elif message['type'] == 'lifecycle.shutdown.success':
+        elif message['type'] == 'lifespan.shutdown.complete':
             self.logger.info('Application shutdown has completed successfully')
             self.shutdown_event.set()
 

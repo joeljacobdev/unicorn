@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +10,15 @@ from unicorn.manager import Manager
 
 logger = logging.getLogger('app')
 
-app = FastAPI(debug=True)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info(f'On startup of {app.title}')
+    yield
+    logger.info(f'On shutdown of {app.title}')
+
+
+app = FastAPI(lifespan=lifespan, title='unicorn app')
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,16 +29,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
 )
-
-
-@app.on_event('startup')
-async def on_startup():
-    logger.info('on startup')
-
-
-@app.on_event('shutdown')
-async def on_shutdown():
-    logger.info('on shutdown')
 
 
 class Person(BaseModel):

@@ -74,7 +74,7 @@ class Lifecycle:
             }
             await self.app(scope, self.receive, self.send)
         except Exception as e:
-            self.logger.error('Failed lifespan setup of the server with the following error = ', exc_info=e)
+            self.logger.error('Following error occurred during lifespan of the server.', exc_info=e)
         finally:
             self.startup_event.set()
             self.shutdown_event.set()
@@ -82,11 +82,11 @@ class Lifecycle:
     async def on_startup(self):
         loop = asyncio.get_running_loop()
         main_task = loop.create_task(self.main())  # noqa
-        await self.events.put({'type': 'lifecycle.startup'})
+        await self.events.put({'type': 'lifespan.startup'})
         await self.startup_event.wait()
 
     async def on_shutdown(self):
-        await self.events.put({'type': 'lifecycle.shutdown'})
+        await self.events.put({'type': 'lifespan.shutdown'})
         await self.shutdown_event.wait()
 
     async def receive(self):

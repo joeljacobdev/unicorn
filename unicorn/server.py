@@ -9,7 +9,12 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class Server:
-    def __init__(self, app, host='0.0.0.0', port=8000):
+    """
+    Worker server, which creates async server running on the current thread's event loop.
+    We require this async server to reuse port, so that multiple workers can be run and handle request
+     from the same port.
+    """
+    def __init__(self, app: str, host: str = '0.0.0.0', port: int = 8000):
         self.app = utils.import_from_string(app)
         self.host = host
         self.port = port
@@ -19,6 +24,9 @@ class Server:
         self.access_logger = logging.getLogger('unicorn.access')
 
     def run(self):
+        """
+        Start the server in an event loop
+        """
         asyncio.run(self.serve())
 
     def on_interrupt(self, sig, _):
@@ -32,6 +40,11 @@ class Server:
         await cycle.complete()
 
     async def serve(self):
+        """
+        Create a server which will start serving request after the ASGI lifespan start event is triggered.
+        Once an interrupt is received, it will perform the required cleanup using the ASGI lifespan shutdown event.
+        Interrupt handling is done on worker so that each worker can perform cleanup of its resources.
+        """
         lifecycle = Lifecycle(app=self.app, state={})
         for sig in [signal.SIGINT, signal.SIGTERM]:
             signal.signal(sig, self.on_interrupt)
@@ -46,6 +59,7 @@ class Server:
         await lifecycle.on_startup()
         async with server:
             await server.start_serving()
+            # While interrupt is not received, do this infinitely.
             while not self.should_exit:
                 await asyncio.sleep(0.1)
         await lifecycle.on_shutdown()
@@ -55,6 +69,10 @@ class Lifecycle:
     __slots__ = ('app', 'state', 'startup_event', 'shutdown_event', 'events', 'logger',)
 
     def __init__(self, app, state):
+        """
+        :param app: Instance of application server
+        :param state: dict containing state of the server. NOT used in current implementation.
+        """
         self.app = app
         self.state = state
         self.startup_event = asyncio.Event()
@@ -162,14 +180,18 @@ class RequestResponseCycle:
         return {'type': 'http.request', 'body': self.body}
 
     @staticmethod
-    def _parse_request(request_bytes):
+    def _parse_request(request_bytes: bytes) -> tuple[bytes, bytes, bytes, list[tuple[bytes, bytes]], bytes]:
+        """
+        Parses the request data and return request method, path, query string, headers and body
+        :param request_bytes: bytes of request data
+        """
         request = request_bytes
         request_lines = request.split(b'\r\n')
 
         # Extract the request method
         request_line = request_lines[0]
 
-        request_method = request_line.split(b' ')[0]
+        request_method: bytes = request_line.split(b' ')[0]
         path, _, query_string = request_line.split(b' ')[1].partition(b'?')
 
         # Extract the headers

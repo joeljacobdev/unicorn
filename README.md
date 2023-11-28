@@ -27,7 +27,7 @@ The web server currently supports the following features:
 
 - [x] Handling GET requests
 - [x] Handling OPTIONS requests
-- [x] Supporting HEAD requests
+- [ ] Supporting HEAD requests
 - [x] Supporting ASGI lifespan start/complete events
 - [x] Basic support for multiple worker processes
 - [ ] Support for POST and DELETE requests (work in progress)

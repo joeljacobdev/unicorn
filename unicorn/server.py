@@ -98,9 +98,9 @@ class Lifecycle:
             self.shutdown_event.set()
 
     async def on_startup(self):
+        await self.events.put({'type': 'lifespan.startup'})
         loop = asyncio.get_running_loop()
         main_task = loop.create_task(self.main())  # noqa
-        await self.events.put({'type': 'lifespan.startup'})
         await self.startup_event.wait()
 
     async def on_shutdown(self):
